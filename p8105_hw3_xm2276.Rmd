@@ -9,11 +9,12 @@ output: github_document
 #question is this leaflet necessary?
 library(leaflet)
 library(p8105.datasets)
-data("instacart")
 library(tidyverse)
 library(dplyr)
 library(ggridges)
 ```
+
+**Problem 1**
 
 There are **`r nrow(instacart)`**observations of the dataset.  
 There are **`r ncol(instacart)` variables** of the dataset.  
@@ -21,40 +22,72 @@ The variables of the dataset are **`r colnames(instacart)`**.
 The **dimension of the dataset is `r dim(instacart)`**.  
 The **length of the dataset is `r length(instacart)`**.
 The key variables are 'reorded','order_hour_of_day','days_since_prior_order','product_name'
-These variables are 
 
-####describing some key variables, and giving illstrative examples of observations
-
-problem 1
 ```{r}
+data("instacart")
 janitor::clean_names(instacart)
-aisle = instacart %>% 
-  count(aisle) %>%
-  arrange(desc(n))
+aisle1 = instacart %>% 
+        count(aisle) %>%
+        arrange(desc(n))
+most_aisle = instacart %>%
+  group_by(aisle) %>% 
+  summarise(n_obs = n()) %>% 
+  slice_max(n_obs)
 ##There are 134 aisles and 'Fresh Vegetables' are ordered most.
-aisle_10000 = filter(aisle, n <= 10000)
+```
 
+##plot 
+```{r}
+aisle_numb = instacart %>%
+  group_by(aisle) %>% 
+  summarise(n_obs = n()) %>% 
+  filter(n_obs > 10000) %>% 
+  arrange(n_obs) %>% 
+  mutate(aisle = forcats::fct_inorder(aisle))
+ggplot(aisle_numb, aes(x = aisle, y = n_obs)) + geom_col(alpha = 0.7) + coord_flip() 
+```
+
+##Most 3 popular items
+```{r}
+pop_item = instacart %>% 
+  filter(aisle %in% c("baking ingredients","dog food care", "packaged vegetables fruits")) %>% 
+  group_by(aisle, product_name) %>% 
+  summarise(n_obs = n())
+pop_item %>% mutate(order_rank = min_rank(desc(n_obs))) %>% 
+  filter(order_rank < 4) %>% 
+  arrange(aisle, order_rank) %>% 
+  knitr::kable()
+```
+##Mean hour
+```{r}
+meanhour = instacart %>% 
+  filter(product_name == "Pink Lady Apples" | product_name == "Coffee Ice Cream") %>% 
+  group_by(aisle, order_dow) %>% 
+  summarize(mean_hour = mean(order_hour_of_day, na.rm = TRUE), 2) %>% 
+  mutate(order_dow, as.character(order_dow), 
+         order_dow = replace(order_dow, 
+                             order_dow == c("0","1","2","3","4","5","6"), 
+                             c("Sun","Mon","Tues","Wed","Thur","Fri","Sat")))
+meanhour %>% 
+  ungroup() %>%
+  pivot_wider(names_from = order_dow,
+              values_from = mean_hour) %>% 
+  knitr::kable()
 ```
 
 
 
-
-
-Problem 2
+**Problem 2**
 
 ##cleaning the data
-
 ```{r}
 data("brfss_smart2010")
 BRFSS = brfss_smart2010 %>%
   filter(Topic == "Overall Health") %>%
   mutate(
-    Response = factor(Response, levels = c("Poor","Fair","Good","Very good", "Excellent")),
-    Response = as.numeric(Response)) %>% 
+    Response = factor(Response, levels = c("Poor","Fair","Good","Very good", "Excellent"))) %>% 
     arrange(Response)
 ```
-
-##Using this dataset, do or answer the following (commenting on the results of each):
 
 ##In 2002, which states were observed at 7 or more locations? What about in 2010?
 ```{r}
@@ -75,36 +108,95 @@ year_2010
 
 ```
 
-##Construct a dataset that is limited to Excellent responses, and contains, year, state, and a variable that averages the data_value across locations within a state. Make a “spaghetti” plot of this average value over time within a state (that is, make a plot showing a line for each state across years – the geom_line geometry and group aesthetic will help).
+##Spaghetti Plot
 ```{r}
-brfss_excellent = filter(BRFSS, Response == 5 ) %>%
+brfss_excellent = BRFSS %>% 
+   mutate(Response = as.numeric(Response)) %>% 
+   filter(Response == 5 ) %>%
    select(Year,Data_value, Locationabbr,Response) %>% 
    group_by(Year, Locationabbr) %>% 
-   summarise_at(vars(Data_value), list(Average = mean))
+   summarise(mean_exc = mean(Data_value))
 brfss_excellent
 
 #plot
-ggplot(data = brfss_excellent, aes(x = Year, y = Average)) + geom_line(data = brfss_excellent,color = names())
-
-p = 
-  brfss_excellent %>% 
-  ggplot(aes(x = Year, y = Average, color = name)) + 
-  geom_point(alpha = .5) +
-  geom_smooth(se = FALSE) + 
-  theme(legend.position = "bottom")
-
+ggplot(data = brfss_excellent, aes(x = Year, y = mean_exc, group = Locationabbr, color = Locationabbr)) + geom_line() + labs(title = "Spaghetti Plot")
 
 ```
 
 ##Make a two-panel plot showing, for the years 2006, and 2010, distribution of data_value for responses (“Poor” to “Excellent”) among locations in NY State.
 ```{r}
+plot_df =  BRFSS %>% 
+  filter(Year == "2006" | Year == "2010", Locationabbr == "NY") %>% 
+  group_by(Year,Response)
+
+ggplot(plot_df, aes(x = Response, y = Data_value, fill = Response)) + geom_col() + facet_grid(.~Year) + 
+  labs(x = "Response",
+       y = "Data Value",
+       title = "Distribution of Data Value Responses Among Locations in NY")
 
 ```
 
 
-problem 3
+**Problem 3**
+
+##Load, tidy, and otherwise wrangle the data. Your final dataset should include all originally observed variables and values; have useful variable names; include a weekday vs weekend variable; and encode data with reasonable variable classes. Describe the resulting dataset (e.g. what variables exist, how many observations, etc).
 ```{r}
 accel_df = read_csv("data/accel_data.csv")
+accel_df %>% 
+  janitor::clean_names()
+accel_df_tidy = pivot_longer(accel_df,
+               activity.1:activity.1440,
+               names_to = "activity",
+               names_prefix = "activity.",
+               values_to = "counts"
+               ) %>% 
+  mutate(weekday_vs_weekend = case_when(
+    day == "Monday"~"weekday",
+    day == "Tuesday" ~ "weekday",
+    day == "Wednesday" ~ "weekday",
+    day == "Thursday" ~ "weekday",
+    day == "Friday" ~ "weekday",
+    day == "Saturday" ~ "weekend",
+    day == "Sunday" ~ "weekend"),
+    week = as.numeric(as.character(week)))
 
 ```
+The variables of the dataset are **`r colnames(accel_df_tidy)`**, there are **`nrow(accel_ds_tidy)`** observations. 
+
+
+
+##Traditional analyses of accelerometer data focus on the total activity over the day. Using your tidied dataset, aggregate accross minutes to create a total activity variable for each day, and create a table showing these totals. Are any trends apparent?
+```{r}
+accel_df_tidy %>% 
+  group_by(day_id) %>% 
+  mutate(total_activity = sum(counts)) %>% 
+  ungroup() %>% 
+  select(week, day, total_activity) %>%
+  distinct() %>% 
+  pivot_wider(
+    names_from = "day",
+    values_from = "total_activity")
+  
+```
+
+##Accelerometer data allows the inspection activity over the course of the day. Make a single-panel plot that shows the 24-hour activity time courses for each day and use color to indicate day of the week. Describe in words any patterns or conclusions you can make based on this graph.
+
+```{r}
+accel_df_tidy %>% 
+  mutate(
+    activity = as.numeric(activity),
+    activity = activity / 60) %>% 
+  ggplot(aes(x = activity, y = counts, color = day)) + geom_point() +
+  labs(title = "24-hour Activity for each day of a week")
+
+
+accel_df_tidy %>% 
+  mutate(
+    activity = as.numeric(activity),
+    activity = activity / 60) %>% 
+  ggplot(aes(x = activity, y = counts, color = day)) + geom_smooth() +
+  labs(title = "24-hour Activity for each day of a week", x = "Time", y = "Activity")
+```
+By observing the plot, we find that in the early morning, the activities are not that active as in the mid or evening of the day. There are two peak of activities around 12th and 20th hour. The highest point is on Wednesday around 19th hour.
+
 
