@@ -188,14 +188,6 @@ accel_df_tidy %>%
     activity = activity / 60) %>% 
   ggplot(aes(x = activity, y = counts, color = day)) + geom_point() +
   labs(title = "24-hour Activity for each day of a week")
-
-
-accel_df_tidy %>% 
-  mutate(
-    activity = as.numeric(activity),
-    activity = activity / 60) %>% 
-  ggplot(aes(x = activity, y = counts, color = day)) + geom_smooth() +
-  labs(title = "24-hour Activity for each day of a week", x = "Time", y = "Activity")
 ```
 By observing the plot, we find that in the early morning, the activities are not that active as in the mid or evening of the day. There are two peak of activities around 12th and 20th hour. The highest point is on Wednesday around 19th hour.
 
